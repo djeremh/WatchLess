@@ -1,3 +1,5 @@
+**PHP 5.1.2+ is required.**
+
 # Usage
 
 Basic usage is very easy:
