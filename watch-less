@@ -10,6 +10,7 @@ class LessWatcher
     private $destDir;
     private $outputExtension;
     private $compiled;
+    private $errors = array();
 
     public function __construct()
     {
@@ -17,18 +18,20 @@ class LessWatcher
 
         if (count($args) < 3)
         {
-            die("Usage:\n"
+            $this->writeln("Usage:\n"
                 . "  \$ watch-less [LESS_SOURCE_DIRECTORY]"
                     . "[CSS_OUTPUT_DIRECTORY]\n"
                 . "  \$ watch-less [LESS_SOURCE_DIRECTORY]"
-                    . "[CSS_OUTPUT_DIRECTORY] [OUTPUT_EXTENSION=.css]\n");
+                    . "[CSS_OUTPUT_DIRECTORY] [OUTPUT_EXTENSION=.css]");
+            exit;
         }
 
         $this->srcDir = rtrim($args[1], DS);
         $this->destDir = rtrim($args[2], DS);
         $this->outputExtension = count($args) > 3 ? $args[3] : '.css';
 
-        echo 'Watching ' . $this->srcDir . '...' . "\n";
+        $this->writeln();
+        $this->writeln('Watching ' . $this->srcDir . '...', 'white', 'blue');
         $this->watch();
     }
 
@@ -113,9 +116,96 @@ class LessWatcher
 
     public function compileFile($srcFile, $destFile)
     {
-        exec('lessc --yui-compress ' . $srcFile . ' ' . $destFile);
-        echo substr($srcFile, strlen($this->srcDir) + 1) . ' -> '
-            . substr($destFile, strlen($this->destDir) + 1) . "\n";
+        exec('lessc --yui-compress ' . $srcFile . ' ' . $destFile . ' 2>&1',
+            $output, $return);
+
+        $output = implode("\n", $output);
+        if (preg_match('/(.*Error:.*)/', $output, $matches))
+        {
+            if (isset($this->errors[$srcFile])
+                && $this->errors[$srcFile] === $output)
+            {
+                return;
+            }
+            $this->writeln('[' . date('H:i:s') . '] '
+                . $this->removeColor($matches[1]), 'white', 'red');
+            $this->errors[$srcFile] = $output;
+            return;
+        }
+
+        if (isset($this->errors[$srcFile]))
+        {
+            unset($this->errors[$srcFile]);
+        }
+
+        $this->writeln('[' . date('H:i:s') . '] '
+            . substr($srcFile, strlen($this->srcDir) + 1) . ' -> '
+            . substr($destFile, strlen($this->destDir) + 1), 'green');
+    }
+
+    public function write($str, $fgColor = null, $bgColor = null)
+    {
+        echo $this->colorize($str, $fgColor, $bgColor);
+    }
+
+    public function writeln($str = '', $fgColor = null, $bgColor = null)
+    {
+        $this->write($str, $fgColor, $bgColor);
+        echo "\n";
+    }
+
+    public function colorize($str, $fgColor = null, $bgColor = null)
+    {
+        $colors = array(
+            'fg' => array(
+                'black' => '0;30',
+                'dark_gray' => '1;30',
+                'blue' => '0;34',
+                'light_blue' => '1;34',
+                'green' => '0;32',
+                'light_green' => '1;32',
+                'cyan' => '0;36',
+                'light_cyan' => '1;36',
+                'red' => '0;31',
+                'light_red' => '1;31',
+                'purple' => '0;35',
+                'light_purple' => '1;35',
+                'brown' => '0;33',
+                'yellow' => '1;33',
+                'light_gray' => '0;37',
+                'white' => '1;37',
+            ),
+            'bg' => array(
+                'black' => '40',
+                'red' => '41',
+                'green' => '42',
+                'yellow' => '43',
+                'blue' => '44',
+                'magenta' => '45',
+                'cyan' => '46',
+                'light_gray' => '47',
+            )
+        );
+
+        $colored = '';
+
+        if ($fgColor && isset($colors['fg'][$fgColor]))
+        {
+            $colored .= "\033[" . $colors['fg'][$fgColor] . "m";
+        }
+
+        if ($bgColor && isset($colors['bg'][$bgColor]))
+        {
+            $colored .= "\033[" . $colors['bg'][$bgColor] . "m";
+        }
+
+        $colored .=  $str . "\033[0m";
+        return $colored;
+    }
+
+    public function removeColor($str)
+    {
+        return preg_replace('/\033\[[0-9;]+m/', '', $str);
     }
 
 }
