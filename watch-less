@@ -1,0 +1,123 @@
+#!/usr/bin/env php
+<?php
+
+class LessWatcher
+{
+
+    private $srcDir;
+    private $destDir;
+    private $outputExtension;
+    private $compiled;
+
+    public function __construct()
+    {
+        $args = $_SERVER['argv'];
+
+        if (count($args) < 3)
+        {
+            die("Usage:\n"
+                . "  \$ watch-less [LESS_SOURCE_DIRECTORY]"
+                    . "[CSS_OUTPUT_DIRECTORY]\n"
+                . "  \$ watch-less [LESS_SOURCE_DIRECTORY]"
+                    . "[CSS_OUTPUT_DIRECTORY] [OUTPUT_EXTENSION=.css]\n");
+        }
+
+        define('DS', DIRECTORY_SEPARATOR);
+
+        $this->srcDir = rtrim($args[1], DS);
+        $this->destDir = rtrim($args[2], DS);
+        $this->outputExtension = count($args) > 3 ? $args[3] : '.css';
+
+        echo 'Watching ' . $this->srcDir . '...' . "\n";
+        $this->watch();
+    }
+
+    public function watch()
+    {
+        $this->compiled = array();
+        $this->processDirectory($this->srcDir, $this->destDir);
+
+        usleep(500 * 1000);
+        $this->watch();
+    }
+
+    public function processDirectory($srcDir, $destDir)
+    {
+        $iterator = new \DirectoryIterator($srcDir);
+        foreach ($iterator as $f)
+        {
+            $filename = $f->getFilename();
+            if (in_array($filename, array('.', '..')))
+            {
+                continue;
+            }
+            $path = $f->getPathname();
+            $destPath = $destDir . DS . $filename;
+            if ($f->isDir())
+            {
+                $this->processDirectory($path, $destPath);
+                continue;
+            }
+            $this->processFile($path, $destPath);
+        }
+    }
+
+    public function processFile($srcFile, $destFile)
+    {
+        if (substr($srcFile, -5) !== '.less')
+        {
+            return;
+        }
+        $destFile = substr($destFile, 0, -5) . $this->outputExtension;
+        if (is_file($destFile))
+        {
+            $destFile = realpath($destFile);
+        }
+        $content = file_get_contents($srcFile);
+        if (preg_match_all('/@import +[\'"]([^\'"]+)[\'"];/', $content,
+            $matches))
+        {
+            for ($i = 0, $cn = count($matches[0]); $i < $cn; $i++)
+            {
+                $importFile = realpath(dirname($srcFile) . DS
+                    . $matches[1][$i]);
+                if (!$importFile)
+                {
+                    continue;
+                }
+                $this->processFile($importFile, dirname($destFile)
+                    . DS . $matches[1][$i]);
+            }
+        }
+
+        if (in_array($srcFile, $this->compiled))
+        {
+            return;
+        }
+
+        $destDir = dirname($destFile);
+
+        if (!is_dir($destDir))
+        {
+            mkdir($destDir, 0, true);
+        }
+
+        if (is_file($destFile) && filemtime($destFile) >= filemtime($srcFile))
+        {
+            return;
+        }
+
+        $this->compileFile($srcFile, $destFile);
+        $this->compiled[] = $srcFile;
+    }
+
+    public function compileFile($srcFile, $destFile)
+    {
+        exec('lessc --yui-compress ' . $srcFile . ' ' . $destFile);
+        echo substr($srcFile, strlen($this->srcDir) + 1) . ' -> '
+            . substr($destFile, strlen($this->destDir) + 1) . "\n";
+    }
+
+}
+
+new LessWatcher();
