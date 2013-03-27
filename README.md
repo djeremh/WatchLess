@@ -1,5 +1,7 @@
 **PHP 5.1.2+ is required.**
 
+    $ sudo apt-get install php5 # If PHP is not already installed, of course.
+
 # Usage
 
 Basic usage is very easy:
