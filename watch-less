@@ -1,6 +1,8 @@
 #!/usr/bin/env php
 <?php
 
+define('DS', DIRECTORY_SEPARATOR);
+
 class LessWatcher
 {
 
@@ -21,8 +23,6 @@ class LessWatcher
                 . "  \$ watch-less [LESS_SOURCE_DIRECTORY]"
                     . "[CSS_OUTPUT_DIRECTORY] [OUTPUT_EXTENSION=.css]\n");
         }
-
-        define('DS', DIRECTORY_SEPARATOR);
 
         $this->srcDir = rtrim($args[1], DS);
         $this->destDir = rtrim($args[2], DS);
