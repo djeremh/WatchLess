@@ -10,6 +10,7 @@ class LessWatcher
     private $destDir;
     private $outputExtension;
     private $compiled;
+    private $configs;
     private $errors = array();
 
     public function __construct()
@@ -32,16 +33,97 @@ class LessWatcher
 
         $this->writeln();
         $this->writeln('Watching ' . $this->srcDir . '...', 'white', 'blue');
+        
+        $this->configs = array();
+        $this->configPaths = array();
+        $this->processConfig($this->srcDir, $this->destDir);
+
         $this->watch();
     }
 
     public function watch()
     {
         $this->compiled = array();
-        $this->processDirectory($this->srcDir, $this->destDir);
+
+        if (count($this->configs)) {
+            foreach ($this->configs as $config) {
+                $this->processDirectory($this->srcDir, $this->destDir . DS . $config);
+            }
+        } else
+        {
+            $this->processDirectory($this->srcDir, $this->destDir);
+        }
+        
 
         usleep(500 * 1000);
         $this->watch();
+    }
+
+    public function processConfig($srcDir, $destDir)
+    {
+        $srcf = $this->dir_exists($srcDir, "config");
+        if (!isset($srcf))
+        {
+            $this->writeln('No config folder in your source', 'white', 'red');
+            return;
+        }
+
+        $dirs = $this->getConfigSettings();
+        foreach ($dirs as $d)
+        {
+            if (!file_exists($srcf->getPathname() . DS . $d . ".less")) continue;
+            $this->writeln($d . " less config file found");
+
+            $destf = $this->dir_exists($destDir, $d);
+            if (!isset($destf))
+            {
+                $this->writeln($d . ' directory is not present in your destination directory', 'white', 'red');
+                continue;
+            }
+            array_push($this->configs, $d);
+            array_push($this->configPaths, $srcf->getPathname() . DS . $d . ".less");
+        }
+    }
+
+    public function dir_exists($currentDir, $dirName)
+    {
+        $iterator = new \DirectoryIterator($currentDir);
+        foreach ($iterator as $f)
+        {
+            if ($f->isDot()) continue;
+            if (!$f->isDir()) continue;
+            if ($f->getFilename() == $dirName )
+            {
+                return $f;
+            }
+        }
+    }
+
+    public function getConfigSettings()
+    {
+        $file="config.ini";
+        if (file_exists($file) && is_readable($file))
+        {
+            $settings = parse_ini_file($file);
+            return explode(",",$settings["dirs"]);
+        }
+    }
+
+    public function addConfig($file, $configPath)
+    {
+        $contents = '@import "' . $configPath . '";'. file_get_contents($file);
+        file_put_contents($file, $contents);
+        return $file;
+    }
+
+    public function getConfigFromPath($path)
+    {
+        foreach ($this->configs as $config) {
+            if (strpos("x".$path,$config) !== false) {
+                return $config;
+            }
+        }
+        return "";
     }
 
     public function processDirectory($srcDir, $destDir)
@@ -67,6 +149,11 @@ class LessWatcher
 
     public function processFile($srcFile, $destFile)
     {
+        if (strpos("x".$srcFile, "config") !== false)
+        {
+            return;
+        }
+
         if (substr($srcFile, -5) !== '.less')
         {
             return;
@@ -110,13 +197,28 @@ class LessWatcher
             return;
         }
 
-        $this->compileFile($srcFile, $destFile);
+        $config = $this->getConfigFromPath($destFile);
+        if (strlen($config)) {
+            $configPath = $this->configPaths[array_search($config, $this->configs)];
+            $tmpSrcFile = substr($srcFile, 0, -5) . ".tmp.less";
+            if (!copy($srcFile, $tmpSrcFile))
+            {
+                $this->writeln('Failed to create ' . $srcFile . ' temp file', 'white', 'red');
+            }
+
+            $tmpSrcFile = $this->addConfig($tmpSrcFile, $configPath);
+            $this->writeln($tmpSrcFile . ' has been set with' . $configPath, 'blue', 'light_gray');
+            $this->compileFile($tmpSrcFile, $destFile);
+            unlink($tmpSrcFile);
+        } else {
+            $this->compileFile($srcFile, $destFile);
+        }
         $this->compiled[] = $srcFile;
     }
 
     public function compileFile($srcFile, $destFile)
     {
-        exec('lessc --yui-compress ' . $srcFile . ' ' . $destFile . ' 2>&1',
+        exec('lessc ' . $srcFile . ' ' . $destFile . ' 2>&1',
             $output, $return);
 
         $output = implode("\n", $output);
@@ -138,6 +240,7 @@ class LessWatcher
             unset($this->errors[$srcFile]);
         }
 
+        $this->writeln('compile time !', 'red');
         $this->writeln('[' . date('H:i:s') . '] '
             . substr($srcFile, strlen($this->srcDir) + 1) . ' -> '
             . substr($destFile, strlen($this->destDir) + 1), 'green');
