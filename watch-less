@@ -15,21 +15,12 @@ class LessWatcher
 
     public function __construct()
     {
-        $args = $_SERVER['argv'];
+        $opts = getopt("a", array("all", "src:", "dest:", "ext:"));
 
-        if (count($args) < 3)
-        {
-            $this->writeln("Usage:\n"
-                . "  \$ watch-less [LESS_SOURCE_DIRECTORY]"
-                    . "[CSS_OUTPUT_DIRECTORY]\n"
-                . "  \$ watch-less [LESS_SOURCE_DIRECTORY]"
-                    . "[CSS_OUTPUT_DIRECTORY] [OUTPUT_EXTENSION=.css]");
-            exit;
-        }
-
-        $this->srcDir = rtrim($args[1], DS);
-        $this->destDir = rtrim($args[2], DS);
-        $this->outputExtension = count($args) > 3 ? $args[3] : '.css';
+        $this->srcDir = rtrim($opts['src'], DS);
+        $this->destDir = rtrim($opts['dest'], DS);
+        $this->outputExtension = array_key_exists('ext', $opts) ? $opts['ext'] : '.css';
+        $this->isAll = array_key_exists('a', $opts) || array_key_exists('all', $opts);
 
         $this->writeln();
         $this->writeln('Watching ' . $this->srcDir . '...', 'white', 'blue');
@@ -43,20 +34,24 @@ class LessWatcher
 
     public function watch()
     {
-        $this->compiled = array();
-
         if (count($this->configs)) {
             foreach ($this->configs as $config) {
+                $this->compiled = array();
                 $this->processDirectory($this->srcDir, $this->destDir . DS . $config);
             }
         } else
         {
+            $this->compiled = array();
             $this->processDirectory($this->srcDir, $this->destDir);
         }
         
 
         usleep(500 * 1000);
-        $this->watch();
+
+        if (!$this->isAll)
+        {
+            $this->watch();
+        }
     }
 
     public function processConfig($srcDir, $destDir)
@@ -118,8 +113,10 @@ class LessWatcher
 
     public function getConfigFromPath($path)
     {
-        foreach ($this->configs as $config) {
-            if (strpos("x".$path,$config) !== false) {
+        foreach ($this->configs as $config)
+        {
+            if (strpos("x".$path,$config) !== false)
+            {
                 return $config;
             }
         }
@@ -192,16 +189,19 @@ class LessWatcher
             mkdir($destDir, 0, true);
         }
 
-        if (is_file($destFile) && filemtime($destFile) >= filemtime($srcFile))
+        if (!$this->isAll)
         {
-            return;
+            if (is_file($destFile) && filemtime($destFile) >= filemtime($srcFile))
+            {
+                return;
+            }
         }
 
         $config = $this->getConfigFromPath($destFile);
         if (strlen($config)) {
             $configPath = $this->configPaths[array_search($config, $this->configs)];
             $tmpSrcFile = substr($srcFile, 0, -5) . ".tmp.less";
-            if (!copy($srcFile, $tmpSrcFile))
+            if (!copy($srcFile, $tmpSrcFile) && !file_exists($tmpSrcFile))
             {
                 $this->writeln('Failed to create ' . $srcFile . ' temp file', 'white', 'red');
             }
@@ -218,7 +218,7 @@ class LessWatcher
 
     public function compileFile($srcFile, $destFile)
     {
-        exec('lessc ' . $srcFile . ' ' . $destFile . ' 2>&1',
+        exec('lessc --yui-compress ' . $srcFile . ' ' . $destFile . ' 2>&1',
             $output, $return);
 
         $output = implode("\n", $output);
