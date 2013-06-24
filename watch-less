@@ -17,6 +17,7 @@ class LessWatcher
     {
         $opts = getopt("a", array("all", "src:", "dest:", "ext:"));
 
+        //get the options data and store them
         $this->srcDir = rtrim($opts['src'], DS);
         $this->destDir = rtrim($opts['dest'], DS);
         $this->outputExtension = array_key_exists('ext', $opts) ? $opts['ext'] : '.css';
@@ -32,10 +33,14 @@ class LessWatcher
         $this->watch();
     }
 
+    /**
+     * watch the folder for change
+     */
     public function watch()
     {
         if (count($this->configs)) {
-            foreach ($this->configs as $config) {
+            foreach ($this->configs as $config)
+            {
                 $this->compiled = array();
                 $this->processDirectory($this->srcDir, $this->destDir . DS . $config);
             }
@@ -54,6 +59,9 @@ class LessWatcher
         }
     }
 
+    /**
+     * get the config names
+     */
     public function processConfig($srcDir, $destDir)
     {
         $srcf = $this->dir_exists($srcDir, "config");
@@ -80,6 +88,9 @@ class LessWatcher
         }
     }
 
+    /**
+     * check if a directory $dirName exist in the $currentDir directory
+     */
     public function dir_exists($currentDir, $dirName)
     {
         $iterator = new \DirectoryIterator($currentDir);
@@ -94,6 +105,9 @@ class LessWatcher
         }
     }
 
+    /**
+     * extract config directory names from the config.ini file
+     */
     public function getConfigSettings()
     {
         $file="config.ini";
@@ -104,6 +118,9 @@ class LessWatcher
         }
     }
 
+    /**
+     * Import the config file from $configPath in the given less $file.
+     */
     public function addConfig($file, $configPath)
     {
         $contents = '@import "' . $configPath . '";'. file_get_contents($file);
@@ -111,6 +128,10 @@ class LessWatcher
         return $file;
     }
 
+    /**
+     * get the needed config name from the $path string.
+     * return an empty string if no config name has been found
+     */
     public function getConfigFromPath($path)
     {
         foreach ($this->configs as $config)
@@ -123,6 +144,10 @@ class LessWatcher
         return "";
     }
 
+    /**
+     * process every file in $srcDir.
+     * it has been given to $destDir the same arborescence than the $srcDir
+     */
     public function processDirectory($srcDir, $destDir)
     {
         $iterator = new \DirectoryIterator($srcDir);
@@ -144,13 +169,18 @@ class LessWatcher
         }
     }
 
+    /**
+     * check if everything's ok for compiling
+     */
     public function processFile($srcFile, $destFile)
     {
+        // don't compile the config file
         if (strpos("x".$srcFile, "config") !== false)
         {
             return;
         }
 
+        // only compile less file
         if (substr($srcFile, -5) !== '.less')
         {
             return;
@@ -177,6 +207,7 @@ class LessWatcher
             }
         }
 
+        // don't compile a file already compiled (usefull for import file)
         if (in_array($srcFile, $this->compiled))
         {
             return;
@@ -189,6 +220,7 @@ class LessWatcher
             mkdir($destDir, 0, true);
         }
 
+        // compile file only if it has been modified
         if (!$this->isAll)
         {
             if (is_file($destFile) && filemtime($destFile) >= filemtime($srcFile))
@@ -200,6 +232,8 @@ class LessWatcher
         $config = $this->getConfigFromPath($destFile);
         if (strlen($config)) {
             $configPath = $this->configPaths[array_search($config, $this->configs)];
+
+            //use a temp file to compile
             $tmpSrcFile = substr($srcFile, 0, -5) . ".tmp.less";
             if (!copy($srcFile, $tmpSrcFile) && !file_exists($tmpSrcFile))
             {
@@ -207,7 +241,6 @@ class LessWatcher
             }
 
             $tmpSrcFile = $this->addConfig($tmpSrcFile, $configPath);
-            $this->writeln($tmpSrcFile . ' has been set with' . $configPath, 'blue', 'light_gray');
             $this->compileFile($tmpSrcFile, $destFile);
             unlink($tmpSrcFile);
         } else {
@@ -216,6 +249,9 @@ class LessWatcher
         $this->compiled[] = $srcFile;
     }
 
+    /**
+     * Compile the file using lessc
+     */
     public function compileFile($srcFile, $destFile)
     {
         exec('lessc --yui-compress ' . $srcFile . ' ' . $destFile . ' 2>&1',
