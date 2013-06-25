@@ -11,11 +11,13 @@ class LessWatcher
     private $outputExtension;
     private $compiled;
     private $configs;
+    private $isAll;
+    private $configPaths;
     private $errors = array();
 
     public function __construct()
     {
-        $opts = getopt("a", array("all", "src:", "dest:", "ext:"));
+        $opts = getopt('a', array('all', 'src:', 'dest:', 'ext:'));
 
         //get the options data and store them
         $this->srcDir = rtrim($opts['src'], DS);
@@ -64,7 +66,7 @@ class LessWatcher
      */
     public function processConfig($srcDir, $destDir)
     {
-        $srcf = $this->dir_exists($srcDir, "config");
+        $srcf = $this->getSubdir($srcDir, "config");
         if (!isset($srcf))
         {
             $this->writeln('No config folder in your source', 'white', 'red');
@@ -74,24 +76,25 @@ class LessWatcher
         $dirs = $this->getConfigSettings();
         foreach ($dirs as $d)
         {
-            if (!file_exists($srcf->getPathname() . DS . $d . ".less")) continue;
+            $configPath = $srcf->getPathname() . DS . $d . ".less";
+            if (!file_exists($configPath)) continue;
             $this->writeln($d . " less config file found");
 
-            $destf = $this->dir_exists($destDir, $d);
+            $destf = $this->getSubdir($destDir, $d);
             if (!isset($destf))
             {
                 $this->writeln($d . ' directory is not present in your destination directory', 'white', 'red');
                 continue;
             }
-            array_push($this->configs, $d);
-            array_push($this->configPaths, $srcf->getPathname() . DS . $d . ".less");
+            $this->configs[] = $d;
+            $this->configPaths[] = $configPath;
         }
     }
 
     /**
-     * check if a directory $dirName exist in the $currentDir directory
+     * check if a directory $dirName exist in the $currentDir directory and return it if it's the case.
      */
-    public function dir_exists($currentDir, $dirName)
+    public function getSubdir($currentDir, $dirName)
     {
         $iterator = new \DirectoryIterator($currentDir);
         foreach ($iterator as $f)
@@ -123,7 +126,7 @@ class LessWatcher
      */
     public function addConfig($file, $configPath)
     {
-        $contents = '@import "' . $configPath . '";'. file_get_contents($file);
+        $contents = '@import "' . $configPath . '";' . file_get_contents($file);
         file_put_contents($file, $contents);
         return $file;
     }
@@ -136,7 +139,7 @@ class LessWatcher
     {
         foreach ($this->configs as $config)
         {
-            if (strpos("x".$path,$config) !== false)
+            if (strpos("x" . $path, $config) !== false)
             {
                 return $config;
             }
@@ -238,6 +241,7 @@ class LessWatcher
             if (!copy($srcFile, $tmpSrcFile) && !file_exists($tmpSrcFile))
             {
                 $this->writeln('Failed to create ' . $srcFile . ' temp file', 'white', 'red');
+                return;
             }
 
             $tmpSrcFile = $this->addConfig($tmpSrcFile, $configPath);
