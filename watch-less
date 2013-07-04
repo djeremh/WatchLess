@@ -139,7 +139,7 @@ class LessWatcher
     {
         foreach ($this->configs as $config)
         {
-            if (strpos("x" . $path, $config) !== false)
+            if (strpos("x" . $path, $config . '/') !== false)
             {
                 return $config;
             }
